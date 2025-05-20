@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sports Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.16/dist/tailwind.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-blue-600 text-white p-4">
+    <div class="container mx-auto flex justify-between items-center">
+      <h1 class="text-2xl font-bold">Sports Dashboard</h1>
+      <nav>
+        <ul class="flex space-x-4">
+          <li><a href="index.html" class="hover:underline">Home</a></li>
+          <li><a href="dashboard-weather.html" class="hover:underline">Weather Dashboard</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-grow container mx-auto p-6">
+    <section>
+      <h2 class="text-xl font-semibold mb-4">Recent Match Results</h2>
+
+      <!-- Search Input -->
+      <div class="mb-6">
+        <input id="searchInput" type="text" placeholder="Search for an event, e.g. Arsenal vs Chelsea"
+               class="p-2 rounded border w-full md:w-1/2"/>
+        <button onclick="searchEvent()"
+                class="ml-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          Search
+        </button>
+      </div>
+
+      <!-- Match Data -->
+      <div id="match-data" class="space-y-4">
+        <p>Loading matches...</p>
+      </div>
+
+      <!-- Chart -->
+      <h3 class="text-lg font-semibold mt-10 mb-2">Match Results Chart</h3>
+      <div class="bg-white p-4 rounded shadow">
+        <canvas id="sportsChart" aria-label="Match Results Chart" role="img"></canvas>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white p-4 text-center">
+    <p>&copy; 2025 Sports Dashboard</p>
+  </footer>
+
+  <!-- JavaScript -->
+  <script>
+    const apiKey = '3';
+    const leagueId = 4328;
+    const chartContext = document.getElementById('sportsChart').getContext('2d');
+    let currentChart = null;
+
+    // Fetch recent matches on load
+    const pastEventsUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventspastleague.php?id=${leagueId}`;
+
+    fetch(pastEventsUrl)
+      .then(response => response.json())
+      .then(data => {
+        const matches = data.events?.slice(0, 10);
+        if (matches && matches.length > 0) {
+          displayMatches(matches);
+          renderChart(matches);
+        } else {
+          document.getElementById('match-data').innerHTML = '<p>No match data available.</p>';
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching data:', error);
+        document.getElementById('match-data').innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+      });
+
+    function displayMatches(matches) {
+      const container = document.getElementById('match-data');
+      container.innerHTML = '';
+      matches.forEach(match => {
+        const div = document.createElement('div');
+        div.className = 'bg-white p-4 rounded shadow';
+        div.innerHTML = `
+          <h4 class="text-lg font-bold">${match.strEvent}</h4>
+          <p><strong>Home Team:</strong> ${match.strHomeTeam}</p>
+          <p><strong>Away Team:</strong> ${match.strAwayTeam}</p>
+          <p><strong>Score:</strong> ${match.intHomeScore} - ${match.intAwayScore}</p>
+          <p><strong>Date:</strong> ${match.dateEvent} <strong>Time:</strong> ${match.strTime}</p>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function renderChart(matches) {
+      const labels = matches.map(match => match.strEvent);
+      const homeScores = matches.map(match => parseInt(match.intHomeScore) || 0);
+      const awayScores = matches.map(match => parseInt(match.intAwayScore) || 0);
+
+      // Destroy previous chart if exists
+      if (currentChart) {
+        currentChart.destroy();
+      }
+
+      currentChart = new Chart(chartContext, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Home Score',
+              data: homeScores,
+              backgroundColor: 'rgba(54, 162, 235, 0.6)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              borderWidth: 1
+            },
+            {
+              label: 'Away Score',
+              data: awayScores,
+              backgroundColor: 'rgba(255, 99, 132, 0.6)',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'top'
+            },
+            title: {
+              display: true,
+              text: 'Match Scores'
+            }
+          }
+        }
+      });
+    }
+
+    function searchEvent() {
+      const query = document.getElementById('searchInput').value.trim();
+      if (!query) return;
+
+      const searchUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/searchevents.php?e=${encodeURIComponent(query)}`;
+      document.getElementById('match-data').innerHTML = '<p>Searching...</p>';
+
+      fetch(searchUrl)
+        .then(response => response.json())
+        .then(data => {
+          const matches = data.event;
+          if (matches && matches.length > 0) {
+            displayMatches(matches);
+            renderChart(matches);
+          } else {
+            document.getElementById('match-data').innerHTML = `<p class="text-yellow-600">No results found for "${query}".</p>`;
+            if (currentChart) {
+              currentChart.destroy();
+              currentChart = null;
+            }
+          }
+        })
+        .catch(error => {
+          console.error('Search error:', error);
+          document.getElementById('match-data').innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+        });
+    }
+  </script>
+</body>
+</html>
