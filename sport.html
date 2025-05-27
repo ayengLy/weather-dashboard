@@ -2,111 +2,171 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sports Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.16/dist/tailwind.min.css" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+    }
+    #match-data > div:hover {
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transform: translateY(-2px);
+      transition: all 0.3s ease;
+    }
+    button:focus, input:focus, select:focus {
+      outline: none;
+      box-shadow: 0 0 5px 2px rgba(99, 179, 237, 0.6);
+    }
+  </style>
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col">
 
   <!-- Header -->
-  <header class="bg-blue-600 text-white p-4">
+  <header class="bg-blue-500 text-white p-5 shadow-md">
     <div class="container mx-auto flex justify-between items-center">
-      <h1 class="text-2xl font-bold">Sports Dashboard</h1>
+      <h1 class="text-3xl font-semibold tracking-wide">Sports Dashboard</h1>
       <nav>
-        <ul class="flex space-x-4">
-          <li><a href="index.html" class="hover:underline">Home</a></li>
-          <li><a href="weather.html" class="hover:underline">Weather Dashboard</a></li>
+        <ul class="flex space-x-6 text-lg">
+          <li><a href="index.html" class="hover:underline hover:text-blue-200 transition">Home</a></li>
+          <li><a href="dashboard-weather.html" class="hover:underline hover:text-blue-200 transition">Weather Dashboard</a></li>
         </ul>
       </nav>
     </div>
   </header>
 
   <!-- Main Content -->
-  <main class="flex-grow container mx-auto p-6">
+  <main class="flex-grow container mx-auto p-8 max-w-4xl">
     <section>
-      <h2 class="text-xl font-semibold mb-4">Recent Match Results</h2>
+      <h2 class="text-2xl font-semibold mb-6 text-blue-700">Recent Match Results</h2>
 
-      <!-- Search Input -->
-      <div class="mb-6">
+      <!-- Search Input + Clear -->
+      <div class="mb-6 flex flex-col md:flex-row gap-3 md:gap-4 items-center">
         <input id="searchInput" type="text" placeholder="Search for an event, e.g. Arsenal vs Chelsea"
-               class="p-2 rounded border w-full md:w-1/2"/>
+               class="p-3 rounded-lg border border-gray-300 w-full md:w-1/2 focus:ring-2 focus:ring-blue-400"/>
         <button onclick="searchEvent()"
-                class="ml-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                class="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-shadow shadow-sm hover:shadow-lg">
           Search
+        </button>
+        <button onclick="clearSearch()" 
+                class="px-6 py-3 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition-shadow shadow-sm hover:shadow-md">
+          Clear Search
         </button>
       </div>
 
+      <!-- Filters -->
+      <div class="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <select id="teamFilter" onchange="applyFilters()" class="p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400">
+          <option value="">All Teams</option>
+          <!-- Teams inserted dynamically -->
+        </select>
+
+        <input id="dateFrom" type="date" onchange="applyFilters()" class="p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400" />
+        <input id="dateTo" type="date" onchange="applyFilters()" class="p-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400" />
+      </div>
+
       <!-- Match Data -->
-      <div id="match-data" class="space-y-4">
-        <p>Loading matches...</p>
+      <div id="match-data" class="space-y-5">
+        <p class="text-gray-500">Loading matches...</p>
       </div>
 
       <!-- Chart -->
-      <h3 class="text-lg font-semibold mt-10 mb-2">Match Results Chart</h3>
-      <div class="bg-white p-4 rounded shadow">
+      <h3 class="text-xl font-semibold mt-12 mb-4 text-blue-700">Match Results Chart</h3>
+      <div class="bg-white p-6 rounded-xl shadow-lg">
         <canvas id="sportsChart" aria-label="Match Results Chart" role="img"></canvas>
       </div>
     </section>
   </main>
 
   <!-- Footer -->
-  <footer class="bg-gray-800 text-white p-4 text-center">
+  <footer class="bg-gray-900 text-gray-300 p-6 text-center select-none">
     <p>&copy; 2025 Sports Dashboard</p>
   </footer>
 
-  <!-- JavaScript -->
   <script>
     const apiKey = '3';
     const leagueId = 4328;
     const chartContext = document.getElementById('sportsChart').getContext('2d');
-    let currentChart = null;
 
-    // Fetch recent matches on load
+    let allMatches = [];   // Original fetched matches
+    let searchResults = []; // Results from search API
+    let currentChart = null;
+    let isSearching = false;
+
+    // Fetch initial matches on load
     const pastEventsUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/eventspastleague.php?id=${leagueId}`;
 
     fetch(pastEventsUrl)
-      .then(response => response.json())
+      .then(res => res.json())
       .then(data => {
-        const matches = data.events?.slice(0, 10);
-        if (matches && matches.length > 0) {
-          displayMatches(matches);
-          renderChart(matches);
+        allMatches = data.events || [];
+        if (allMatches.length > 0) {
+          populateTeamFilter(allMatches);
+          displayMatches(allMatches.slice(0, 10));
+          renderChart(allMatches.slice(0, 10));
         } else {
           document.getElementById('match-data').innerHTML = '<p>No match data available.</p>';
         }
       })
-      .catch(error => {
-        console.error('Error fetching data:', error);
-        document.getElementById('match-data').innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+      .catch(err => {
+        console.error('Error fetching data:', err);
+        document.getElementById('match-data').innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
       });
 
+    // Populate unique teams dropdown from data
+    function populateTeamFilter(matches) {
+      const teams = new Set();
+      matches.forEach(m => {
+        if (m.strHomeTeam) teams.add(m.strHomeTeam);
+        if (m.strAwayTeam) teams.add(m.strAwayTeam);
+      });
+
+      const teamFilter = document.getElementById('teamFilter');
+      teams.forEach(team => {
+        const option = document.createElement('option');
+        option.value = team;
+        option.textContent = team;
+        teamFilter.appendChild(option);
+      });
+    }
+
+    // Display matches list
     function displayMatches(matches) {
       const container = document.getElementById('match-data');
       container.innerHTML = '';
+
+      if (matches.length === 0) {
+        container.innerHTML = `<p class="text-yellow-600">No matches found.</p>`;
+        if (currentChart) {
+          currentChart.destroy();
+          currentChart = null;
+        }
+        return;
+      }
+
       matches.forEach(match => {
         const div = document.createElement('div');
-        div.className = 'bg-white p-4 rounded shadow';
+        div.className = 'bg-white p-5 rounded-xl shadow-sm transition-transform';
         div.innerHTML = `
-          <h4 class="text-lg font-bold">${match.strEvent}</h4>
+          <h4 class="text-xl font-bold text-blue-800">${match.strEvent}</h4>
           <p><strong>Home Team:</strong> ${match.strHomeTeam}</p>
           <p><strong>Away Team:</strong> ${match.strAwayTeam}</p>
-          <p><strong>Score:</strong> ${match.intHomeScore} - ${match.intAwayScore}</p>
+          <p><strong>Score:</strong> ${match.intHomeScore ?? '-'} - ${match.intAwayScore ?? '-'}</p>
           <p><strong>Date:</strong> ${match.dateEvent} <strong>Time:</strong> ${match.strTime}</p>
         `;
         container.appendChild(div);
       });
     }
 
+    // Render chart
     function renderChart(matches) {
-      const labels = matches.map(match => match.strEvent);
-      const homeScores = matches.map(match => parseInt(match.intHomeScore) || 0);
-      const awayScores = matches.map(match => parseInt(match.intAwayScore) || 0);
+      const labels = matches.map(m => m.strEvent);
+      const homeScores = matches.map(m => parseInt(m.intHomeScore) || 0);
+      const awayScores = matches.map(m => parseInt(m.intAwayScore) || 0);
 
-      // Destroy previous chart if exists
-      if (currentChart) {
-        currentChart.destroy();
-      }
+      if (currentChart) currentChart.destroy();
 
       currentChart = new Chart(chartContext, {
         type: 'bar',
@@ -116,56 +176,79 @@
             {
               label: 'Home Score',
               data: homeScores,
-              backgroundColor: 'rgba(54, 162, 235, 0.6)',
-              borderColor: 'rgba(54, 162, 235, 1)',
-              borderWidth: 1
+              backgroundColor: 'rgba(147, 197, 253, 0.7)',  // Tailwind blue-300 pastel
+              borderColor: 'rgba(96, 165, 250, 0.9)', // blue-400
+              borderWidth: 1,
+              borderRadius: 6,
+              barPercentage: 0.6
             },
             {
               label: 'Away Score',
               data: awayScores,
-              backgroundColor: 'rgba(255, 99, 132, 0.6)',
-              borderColor: 'rgba(255, 99, 132, 1)',
-              borderWidth: 1
+              backgroundColor: 'rgba(252, 165, 165, 0.7)', // Tailwind red-300 pastel
+              borderColor: 'rgba(248, 113, 113, 0.9)', // red-400
+              borderWidth: 1,
+              borderRadius: 6,
+              barPercentage: 0.6
             }
           ]
         },
         options: {
           responsive: true,
           scales: {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                precision: 0
-              }
-            }
+            y: { beginAtZero: true, ticks: { precision: 0 } },
+            x: { ticks: { maxRotation: 45, minRotation: 45 } }
           },
           plugins: {
-            legend: {
-              position: 'top'
-            },
-            title: {
-              display: true,
-              text: 'Match Scores'
-            }
+            legend: { position: 'top' },
+            tooltip: { mode: 'index', intersect: false }
           }
         }
       });
     }
 
+    // Apply filters on either allMatches or searchResults
+    function applyFilters() {
+      const team = document.getElementById('teamFilter').value;
+      const dateFrom = document.getElementById('dateFrom').value;
+      const dateTo = document.getElementById('dateTo').value;
+
+      let dataToFilter = isSearching ? searchResults : allMatches;
+
+      let filtered = dataToFilter.filter(m => {
+        if (team && !(m.strHomeTeam === team || m.strAwayTeam === team)) {
+          return false;
+        }
+        if (dateFrom && m.dateEvent < dateFrom) {
+          return false;
+        }
+        if (dateTo && m.dateEvent > dateTo) {
+          return false;
+        }
+        return true;
+      });
+
+      displayMatches(filtered);
+      renderChart(filtered);
+    }
+
+    // Search event using API
     function searchEvent() {
       const query = document.getElementById('searchInput').value.trim();
-      if (!query) return;
+      if (!query) return alert('Please enter a search term.');
 
-      const searchUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/searchevents.php?e=${encodeURIComponent(query)}`;
+      isSearching = true;
       document.getElementById('match-data').innerHTML = '<p>Searching...</p>';
 
+      const searchUrl = `https://www.thesportsdb.com/api/v1/json/${apiKey}/searchevents.php?e=${encodeURIComponent(query)}`;
+
       fetch(searchUrl)
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
-          const matches = data.event;
-          if (matches && matches.length > 0) {
-            displayMatches(matches);
-            renderChart(matches);
+          searchResults = data.event || [];
+          if (searchResults.length > 0) {
+            displayMatches(searchResults);
+            renderChart(searchResults);
           } else {
             document.getElementById('match-data').innerHTML = `<p class="text-yellow-600">No results found for "${query}".</p>`;
             if (currentChart) {
@@ -174,11 +257,25 @@
             }
           }
         })
-        .catch(error => {
-          console.error('Search error:', error);
-          document.getElementById('match-data').innerHTML = `<p class="text-red-500">Error: ${error.message}</p>`;
+        .catch(err => {
+          console.error('Search error:', err);
+          document.getElementById('match-data').innerHTML = `<p class="text-red-500">Error: ${err.message}</p>`;
         });
     }
+
+    // Clear search & reset to original data
+    function clearSearch() {
+      isSearching = false;
+      searchResults = [];
+      document.getElementById('searchInput').value = '';
+      document.getElementById('teamFilter').value = '';
+      document.getElementById('dateFrom').value = '';
+      document.getElementById('dateTo').value = '';
+
+      displayMatches(allMatches.slice(0, 10));
+      renderChart(allMatches.slice(0, 10));
+    }
+
   </script>
 </body>
 </html>
